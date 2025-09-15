@@ -152,4 +152,23 @@ public static class MatrixTools
 
         return resultMatrix;
     }
+
+    /// <summary>
+    /// to write matrix in file.
+    /// </summary>
+    /// <param name="filePath">file to write matrix.</param>
+    /// <param name="matrix">input matrix.</param>
+    public static void WriteMatrixInFile(string filePath, int[,] matrix)
+    {
+        using var writer = new StreamWriter(filePath);
+        for (var row = 0; row < matrix.GetLength(0); row++)
+        {
+            for (var col = 0; col < matrix.GetLength(1); col++)
+            {
+                writer.Write($"{matrix[row, col],4}");
+            }
+
+            writer.Write("\n");
+        }
+    }
 }

@@ -2,8 +2,6 @@
 // Copyright (c) ivan-mezhenin. All rights reserved.
 // </copyright>
 
-using Microsoft.VisualStudio.TestPlatform.ObjectModel;
-
 namespace ParallelMatrixMultiplication.Tests;
 
 /// <summary>
@@ -87,5 +85,20 @@ public class MatrixToolsTest
         };
 
         Assert.Throws<FormatException>(() => MatrixTools.ParallelMultiplyMatrix(matrix1, matrix2));
+    }
+
+    /// <summary>
+    /// test for correct writing matrix to file.
+    /// </summary>
+    [Test]
+    public void MatrixTools_WriteMatrixToFile()
+    {
+        var filePath = Path.Combine(AppContext.BaseDirectory, "TestFiles", "Matrix1.txt");
+        var outputFile = Path.Combine(AppContext.BaseDirectory, "TestFiles", "ToWriteMatrix.txt");
+        var matrix = MatrixTools.ReadMatrixFromFile(filePath);
+
+        MatrixTools.WriteMatrixToFile(outputFile, matrix);
+
+        Assert.That(MatrixTools.ReadMatrixFromFile(outputFile), Is.EqualTo(matrix));
     }
 }

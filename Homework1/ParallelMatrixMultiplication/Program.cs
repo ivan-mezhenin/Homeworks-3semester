@@ -22,7 +22,7 @@ try
 
     var matrix = MatrixTools.MultiplyMatrix(matrix1, matrix2);
 
-    MatrixTools.WriteMatrixInFile(resultMatrixPath, matrix);
+    MatrixTools.WriteMatrixToFile(resultMatrixPath, matrix);
 }
 catch (Exception ex) when (ex is FileNotFoundException
                                or FormatException

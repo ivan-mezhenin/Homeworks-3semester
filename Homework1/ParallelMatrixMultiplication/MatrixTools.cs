@@ -158,7 +158,7 @@ public static class MatrixTools
     /// </summary>
     /// <param name="filePath">file to write matrix.</param>
     /// <param name="matrix">input matrix.</param>
-    public static void WriteMatrixInFile(string filePath, int[,] matrix)
+    public static void WriteMatrixToFile(string filePath, int[,] matrix)
     {
         using var writer = new StreamWriter(filePath);
         for (var row = 0; row < matrix.GetLength(0); row++)

@@ -27,7 +27,7 @@ public static class MatrixTools
 
         if (lines.Length == 0)
         {
-            throw new ArgumentException("File is empty");
+            throw new FormatException("File is empty");
         }
 
         var rowsLength = lines.Length;
@@ -74,7 +74,7 @@ public static class MatrixTools
         var rows2 = matrix2.GetLength(0);
         var cols2 = matrix2.GetLength(1);
 
-        if (cols1 != rows2 || rows1 != cols2)
+        if (cols1 != rows2)
         {
             throw new FormatException("It is impossible to multiply matrices of such sizes");
         }
@@ -112,7 +112,7 @@ public static class MatrixTools
         var rows2 = matrix2.GetLength(0);
         var cols2 = matrix2.GetLength(1);
 
-        if (cols1 != rows2 || rows1 != cols2)
+        if (cols1 != rows2)
         {
             throw new FormatException("It is impossible to multiply matrices of such sizes");
         }

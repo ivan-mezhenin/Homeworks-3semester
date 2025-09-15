@@ -5,7 +5,7 @@
 using ParallelMatrixMultiplication;
 
 // Write dotnet run -- Matrix1File Matrix2File FileWithResult
-if (string.IsNullOrEmpty(args[0]) || string.IsNullOrEmpty(args[1]) || args.Length < 2)
+if (string.IsNullOrEmpty(args[0]) || string.IsNullOrEmpty(args[1]) || string.IsNullOrEmpty(args[2]) || args.Length < 3)
 {
     Console.WriteLine("Error when passing arguments");
     return -1;
@@ -13,6 +13,7 @@ if (string.IsNullOrEmpty(args[0]) || string.IsNullOrEmpty(args[1]) || args.Lengt
 
 var matrix1Path = args[0];
 var matrix2Path = args[1];
+var resultMatrixPath = args[2];
 
 try
 {
@@ -21,7 +22,7 @@ try
 
     var matrix = MatrixTools.MultiplyMatrix(matrix1, matrix2);
 
-    MatrixTools.WriteMatrixInFile("result.txt", matrix);
+    MatrixTools.WriteMatrixInFile(resultMatrixPath, matrix);
 }
 catch (Exception ex) when (ex is FileNotFoundException
                                or FormatException

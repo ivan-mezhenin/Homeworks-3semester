@@ -38,6 +38,18 @@
       <Content Include="TestFiles\ReadMatrixFromFile.txt">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
+      <None Remove="TestFiles\IncorrectFormatMatrix.txt" />
+      <Content Include="TestFiles\IncorrectFormatMatrix.txt">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+      <None Remove="TestFiles\Matrix1.txt" />
+      <Content Include="TestFiles\Matrix1.txt">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+      <None Remove="TestFiles\Matrix2.txt" />
+      <Content Include="TestFiles\Matrix2.txt">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
     </ItemGroup>
     
 </Project>

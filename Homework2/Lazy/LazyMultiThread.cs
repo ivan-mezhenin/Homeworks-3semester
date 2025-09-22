@@ -14,7 +14,7 @@ public class LazyMultiThread<T> : ILazy<T>
 
     private Func<T>? supplier;
     private T? value;
-    private bool isValueCalculated;
+    private volatile bool isValueCalculated;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LazyMultiThread{T}"/> class.
@@ -25,6 +25,13 @@ public class LazyMultiThread<T> : ILazy<T>
         this.supplier = supplier ?? throw new ArgumentNullException(nameof(supplier));
         this.isValueCalculated = false;
     }
+
+    /// <summary>
+    /// creating an instance of the class LazyMultiThread.
+    /// </summary>
+    /// <param name="supplier">the function that calculate the value.</param>
+    /// <returns>new instance of current class.</returns>
+    public static LazyMultiThread<T> Create(Func<T> supplier) => new LazyMultiThread<T>(supplier);
 
     /// <inheritdoc/>
     public T Get()

@@ -24,6 +24,13 @@ public class LazySingleThread<T> : ILazy<T>
         this.isValueCalculated = false;
     }
 
+    /// <summary>
+    /// creating an instance of the class LazySingleThread.
+    /// </summary>
+    /// <param name="supplier">the function that calculate the value.</param>
+    /// <returns>new instance of current class.</returns>
+    public static LazySingleThread<T> Create(Func<T> supplier) => new LazySingleThread<T>(supplier);
+
     /// <inheritdoc/>
     public T Get()
     {

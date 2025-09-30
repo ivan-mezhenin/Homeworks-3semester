@@ -4,6 +4,10 @@
 
 namespace ThreadPool;
 
+/// <summary>
+/// interface of task of my thread pool.
+/// </summary>
+/// <typeparam name="TResult">type of task completion result.</typeparam>
 public interface IMyTask<out TResult>
 {
     /// <summary>

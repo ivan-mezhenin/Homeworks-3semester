@@ -4,14 +4,18 @@
 
 namespace ThreadPool;
 
+/// <summary>
+/// class for management of thread pool.
+/// </summary>
 public class MyThreadPool
 {
     private readonly int threadCount;
     private readonly Thread[] threads;
     private readonly Queue<Action> taskQueue = new Queue<Action>();
     private readonly object queueLock = new object();
-    private readonly AutoResetEvent taskAvailable = new AutoResetEvent(false);
+    private readonly ManualResetEvent taskAvailable = new(false);
     private readonly CancellationTokenSource cts = new CancellationTokenSource();
+    private Exception? exception;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MyThreadPool"/> class.
@@ -27,6 +31,21 @@ public class MyThreadPool
         {
             this.threads[i] = new Thread(this.WorkerLoop);
             this.threads[i].Start();
+        }
+    }
+
+    /// <summary>
+    /// Gets pool exception.
+    /// </summary>
+    /// <returns>exception.</returns>
+    public Exception? PoolException
+    {
+        get
+        {
+            lock (this.queueLock)
+            {
+                return this.exception;
+            }
         }
     }
 
@@ -49,6 +68,27 @@ public class MyThreadPool
     }
 
     /// <summary>
+    /// to stop work of thread pool.
+    /// </summary>
+    public void Shutdown()
+    {
+        lock (this.queueLock)
+        {
+            if (!this.cts.Token.IsCancellationRequested)
+            {
+                this.taskQueue.Clear();
+                this.cts.Cancel();
+                this.taskAvailable.Set();
+            }
+        }
+
+        foreach (var thread in this.threads)
+        {
+            thread.Join();
+        }
+    }
+
+    /// <summary>
     /// to enqueue task.
     /// </summary>
     /// <param name="task">task to enqueue.</param>
@@ -62,10 +102,14 @@ public class MyThreadPool
             }
 
             this.taskQueue.Enqueue(task);
+            this.taskAvailable.Reset();
             this.taskAvailable.Set();
         }
     }
 
+    /// <summary>
+    /// The main flow cycle of the thread pool.
+    /// </summary>
     private void WorkerLoop()
     {
         while (!this.cts.Token.IsCancellationRequested)
@@ -87,7 +131,11 @@ public class MyThreadPool
                 }
                 catch (Exception e)
                 {
-                    // dsds.
+                    lock (this.queueLock)
+                    {
+                        this.exception = e;
+                        this.Shutdown();
+                    }
                 }
             }
             else

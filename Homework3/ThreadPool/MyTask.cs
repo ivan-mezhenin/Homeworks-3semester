@@ -12,7 +12,7 @@ public class MyTask<TResult> : IMyTask<TResult>
 {
     private readonly Func<TResult> func;
     private readonly object locker = new object();
-    private readonly ManualResetEvent completionEvent = new ManualResetEvent(false);
+    private readonly ManualResetEvent completionEvent = new(false);
     private readonly List<Action> continuations = [];
     private readonly MyThreadPool pool;
     private volatile bool isCompleted;
@@ -46,12 +46,12 @@ public class MyTask<TResult> : IMyTask<TResult>
 
             lock (this.locker)
             {
-                if (this.exception != null)
+                if (this.pool.PoolException != null)
                 {
-                    throw new AggregateException(this.exception);
+                    throw new AggregateException(this.pool.PoolException);
                 }
 
-                return this.result!;
+                return this.exception != null ? throw new AggregateException(this.exception) : this.result!;
             }
         }
     }
@@ -71,7 +71,12 @@ public class MyTask<TResult> : IMyTask<TResult>
 
             if (this.IsCompleted)
             {
-                this.pool.EnqueueTask(newTask.Complete());
+                if (this.pool.PoolException != null)
+                {
+                    throw new InvalidOperationException("Cannot continue task after pool error");
+                }
+
+                this.pool.EnqueueTask(newTask.Complete);
             }
             else
             {
@@ -102,7 +107,10 @@ public class MyTask<TResult> : IMyTask<TResult>
             this.completionEvent.Set();
             foreach (var continuation in this.continuations)
             {
-                this.pool.EnqueueTask(continuation);
+                if (this.pool.PoolException == null)
+                {
+                    this.pool.EnqueueTask(continuation);
+                }
             }
         }
     }

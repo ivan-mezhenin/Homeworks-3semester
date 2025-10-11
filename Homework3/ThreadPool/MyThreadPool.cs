@@ -102,7 +102,6 @@ public class MyThreadPool
             }
 
             this.taskQueue.Enqueue(task);
-            this.taskAvailable.Reset();
             this.taskAvailable.Set();
         }
     }
@@ -134,13 +133,17 @@ public class MyThreadPool
                     lock (this.queueLock)
                     {
                         this.exception = e;
-                        this.Shutdown();
                     }
+
+                    this.Shutdown();
                 }
             }
             else
             {
-                this.taskAvailable.WaitOne();
+                if (!this.cts.Token.IsCancellationRequested)
+                {
+                    this.taskAvailable.WaitOne();
+                }
             }
         }
     }

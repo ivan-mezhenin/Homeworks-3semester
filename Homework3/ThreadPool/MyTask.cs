@@ -99,17 +99,20 @@ public class MyTask<TResult> : IMyTask<TResult>
         catch (Exception ex)
         {
             this.exception = ex;
+            throw;
         }
-
-        lock (this.locker)
+        finally
         {
-            this.isCompleted = true;
-            this.completionEvent.Set();
-            foreach (var continuation in this.continuations)
+            lock (this.locker)
             {
-                if (this.pool.PoolException == null)
+                this.isCompleted = true;
+                this.completionEvent.Set();
+                foreach (var continuation in this.continuations)
                 {
-                    this.pool.EnqueueTask(continuation);
+                    if (this.pool.PoolException == null)
+                    {
+                        this.pool.EnqueueTask(continuation);
+                    }
                 }
             }
         }

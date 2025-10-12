@@ -19,7 +19,7 @@ public class MyThreadPoolTest
         int[] numbers = [1, 2, 3, 5, 14, 2, 21];
         var expectedResult = numbers.Sum(x => x * x);
 
-        var task = pool.Submit(() => numbers.Sum(x => x * x)); // Задача: сумма квадратов чисел
+        var task = pool.Submit(() => numbers.Sum(x => x * x));
 
         Assert.Multiple(() =>
         {

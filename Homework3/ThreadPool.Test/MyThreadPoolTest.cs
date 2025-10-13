@@ -116,4 +116,63 @@ public class MyThreadPoolTest
 
         pool.Shutdown();
     }
+
+    /// <summary>
+    /// test for throwing argument out of range exception when passed 0 to constructor.
+    /// </summary>
+    [Test]
+    public void MyThreadPool_Constructor_ZeroThreads_ThrowsArgumentOutOfRangeException()
+     => Assert.Throws<ArgumentOutOfRangeException>(() =>
+     {
+         _ = new MyThreadPool(0);
+     });
+
+    /// <summary>
+    /// test for correct throwing aggregate exception in continue with.
+    /// </summary>
+    [Test]
+    public void MyThreadPool_ContinueWith_ContinuationThrowsException_ThrowsAggregateException()
+    {
+        var pool = new MyThreadPool(5);
+
+        var initialTask = pool.Submit(() => 5);
+
+        var continuationTask = initialTask.ContinueWith<int>(x => throw new InvalidOperationException());
+        Exception? caughtException = null;
+        try
+        {
+            _ = continuationTask.Result;
+        }
+        catch (AggregateException ex)
+        {
+            caughtException = ex.InnerException;
+        }
+
+        Assert.That(caughtException, Is.TypeOf<InvalidOperationException>());
+    }
+
+    /// <summary>
+    /// test for correct work of continueWith.
+    /// </summary>
+    [Test]
+    public void MyThreadPool_ContinueWith()
+    {
+        var pool = new MyThreadPool(2);
+        int[] numbers = [1, 2, 3, 5, 14, 2, 21];
+        var task = pool.Submit(() => numbers.Sum(x => x * x));
+        var expectedTaskResult = numbers.Sum(x => x * x);
+
+        var continuationTask = task.ContinueWith<string>(x => x.ToString());
+        var expectedContinuationTaskResult = expectedTaskResult.ToString();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(continuationTask.Result, Is.EqualTo(expectedContinuationTaskResult));
+            Assert.That(task.IsCompleted, Is.True);
+            Assert.That(task.Result, Is.EqualTo(expectedTaskResult));
+            Assert.That(pool.PoolException, Is.Null);
+        });
+
+        pool.Shutdown();
+    }
 }

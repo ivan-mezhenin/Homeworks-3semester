@@ -33,7 +33,7 @@ public class Server
     /// to start server.
     /// </summary>
     /// <returns>nothing.</returns>
-    public async Task Start()
+    public async Task StartAsync()
     {
         try
         {

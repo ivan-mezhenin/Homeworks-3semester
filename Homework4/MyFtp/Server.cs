@@ -53,6 +53,7 @@ public class Server
                 try
                 {
                     var socket = await this.listener.AcceptSocketAsync();
+                    _ = Task.Run(() => new ClientHandler(socket).HandleAsync());
                 }
                 catch (ObjectDisposedException)
                 {

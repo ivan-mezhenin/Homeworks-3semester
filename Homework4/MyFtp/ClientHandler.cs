@@ -62,7 +62,7 @@ public class ClientHandler
 
                 case 2:
                 {
-                    await HandleGetAsync(filePath, writer, stream);
+                    await this.HandleGetAsync(filePath, writer, stream);
                     break;
                 }
             }
@@ -73,9 +73,29 @@ public class ClientHandler
         }
     }
 
+    /// <summary>
+    /// to handle Get request.
+    /// </summary>
+    /// <param name="filePath">file to get.</param>
+    /// <param name="writer">stream writer.</param>
+    /// <param name="stream">network stream.</param>
     private async Task HandleGetAsync(string filePath, StreamWriter writer, NetworkStream stream)
     {
-        throw new NotImplementedException();
+        var fullPath = Path.GetFullPath(Path.Combine(this.baseDirectory, filePath));
+
+        if (!fullPath.StartsWith(this.baseDirectory, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
+        {
+            await writer.WriteLineAsync("-1");
+            await writer.WriteLineAsync();
+            return;
+        }
+
+        var content = await File.ReadAllBytesAsync(fullPath);
+        await writer.WriteLineAsync(content.Length.ToString());
+
+        await stream.WriteAsync(content);
+
+        await stream.WriteAsync(new[] { (byte)'\n' });
     }
 
     /// <summary>
@@ -84,13 +104,15 @@ public class ClientHandler
     /// <param name="filePath">file to list.</param>
     /// <param name="writer">stream writer.</param>
     /// <returns>task.</returns>
-    public async Task HandleListAsync(string filePath, StreamWriter writer)
+    private async Task HandleListAsync(string filePath, StreamWriter writer)
     {
         var fullPath = Path.GetFullPath(Path.Combine(this.baseDirectory, filePath));
 
-        if (!Directory.Exists(fullPath))
+        if (!fullPath.StartsWith(this.baseDirectory, StringComparison.OrdinalIgnoreCase) || !Directory.Exists(fullPath))
         {
-            throw new DirectoryNotFoundException($"Directory not found: {fullPath}");
+            await writer.WriteLineAsync("-1");
+            await writer.WriteLineAsync();
+            return;
         }
 
         var files = Directory.GetFiles(fullPath)

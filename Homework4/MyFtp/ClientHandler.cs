@@ -115,7 +115,7 @@ public class ClientHandler
             return;
         }
 
-        var files = Directory.GetFiles(fullPath)
+        var files = Directory.GetFileSystemEntries(fullPath)
             .Select(file => new
             {
                 name = Path.GetFileName(file),

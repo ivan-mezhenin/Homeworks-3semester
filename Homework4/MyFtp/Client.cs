@@ -1,18 +1,20 @@
 // <copyright file="Client.cs" company="ivan-mezhenin">
 // Copyright (c) ivan-mezhenin. All rights reserved.
 // </copyright>
-
-using System.Net;
-using System.Net.Sockets;
-
 namespace MyFtp;
 
+using System.Net.Sockets;
+
+/// <summary>
+/// Ftp client.
+/// </summary>
 public class Client : IDisposable
 {
     private readonly TcpClient client;
     private readonly NetworkStream stream;
     private readonly StreamWriter writer;
     private readonly StreamReader reader;
+    private readonly string baseDirectory;
     private bool isDisposed;
 
     /// <summary>
@@ -27,6 +29,7 @@ public class Client : IDisposable
             throw new ArgumentException("Port must be between 1 and 65535");
         }
 
+        this.baseDirectory = Directory.GetCurrentDirectory();
         this.client = new TcpClient(host, port);
         this.stream = this.client.GetStream();
         this.writer = new StreamWriter(this.stream);
@@ -35,11 +38,18 @@ public class Client : IDisposable
         this.isDisposed = false;
     }
 
+    /// <summary>
+    /// list request.
+    /// </summary>
+    /// <param name="filePath">file to list.</param>
+    /// <returns>task.</returns>
     public async Task<(string? Error, int Size, List<(string Name, bool IsDirectory)> Data)> ListRequestAsync(string filePath)
     {
         try
         {
-            await this.writer.WriteLineAsync($"1 filePath");
+            var fullPath = Path.GetFullPath(Path.Combine(this.baseDirectory, filePath));
+
+            await this.writer.WriteLineAsync($"1 {fullPath}");
 
             var size = await this.reader.ReadLineAsync();
 

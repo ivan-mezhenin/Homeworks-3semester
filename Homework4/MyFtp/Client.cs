@@ -1,6 +1,9 @@
 // <copyright file="Client.cs" company="ivan-mezhenin">
 // Copyright (c) ivan-mezhenin. All rights reserved.
 // </copyright>
+
+using System.Text.Unicode;
+
 namespace MyFtp;
 
 using System.Net.Sockets;
@@ -90,11 +93,91 @@ public class Client : IDisposable
     }
 
     /// <summary>
+    /// Get request.
+    /// </summary>
+    /// <param name="filePath">file to get content.</param>
+    /// <returns>size and content of file.</returns>
+    public async Task<(string? Error, long Size, byte[] Content)> GetRequestAsync(string filePath)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(Path.Combine(this.baseDirectory, filePath));
+
+            await this.writer.WriteLineAsync($"2 {fullPath}");
+            await this.writer.FlushAsync();
+
+            var sizeBuilder = new System.Text.StringBuilder();
+            int currentByte;
+
+            while ((currentByte = await this.ReadByteAsync()) != -1)
+            {
+                if (currentByte == ' ')
+                {
+                    break;
+                }
+
+                switch (currentByte)
+                {
+                    case '\n':
+                        return ("Empty request", -1, []);
+                    case '\r':
+                        continue;
+                }
+
+                sizeBuilder.Append(currentByte);
+            }
+
+            if (sizeBuilder.Length == 0)
+            {
+                return ("No size received", -1, []);
+            }
+
+            var sizeString = sizeBuilder.ToString();
+
+            if (sizeString == "-1")
+            {
+                return ("File not found", -1, []);
+            }
+
+            if (!long.TryParse(sizeString, out var fileSize) || fileSize < 0)
+            {
+                return ("Invalid file size", -1, []);
+            }
+
+            Console.WriteLine(fileSize);
+
+            using var ms = new MemoryStream();
+            var buffer = new byte[81920];
+            long totalRead = 0;
+
+            while (totalRead < fileSize)
+            {
+                var toRead = (int)Math.Min(buffer.Length, fileSize - totalRead);
+                var readByte = await this.stream.ReadAsync(buffer.AsMemory(0, toRead));
+
+                if (readByte == 0)
+                {
+                    break;
+                }
+
+                ms.Write(buffer, 0, readByte);
+                totalRead += readByte;
+            }
+
+            return (null, fileSize, ms.ToArray());
+        }
+        catch (Exception ex)
+        {
+            return (ex.Message, -1, []);
+        }
+    }
+
+    /// <summary>
     /// <inheritdoc/>
     /// </summary>
     public void Dispose()
     {
-        if (!this.isDisposed)
+        if (this.isDisposed)
         {
             return;
         }
@@ -104,5 +187,18 @@ public class Client : IDisposable
         this.writer.Dispose();
         this.reader.Dispose();
         this.isDisposed = true;
+    }
+
+    /// <summary>
+    /// to read one byte from stream.
+    /// </summary>
+    /// <returns>read byte.</returns>
+    private async Task<byte> ReadByteAsync()
+    {
+        var buffer = new byte[1];
+
+        await this.stream.ReadExactlyAsync(buffer, 0, 1);
+
+        return buffer[0];
     }
 }

@@ -2,26 +2,22 @@
 // Copyright (c) ivan-mezhenin. All rights reserved.
 // </copyright>
 
+using System.Text;
 using MyFtp;
 
-// === 1. Запускаем сервер ===
 var server = new Server(8888);
 _ = Task.Run(() => server.StartAsync());
 
-await Task.Delay(1000); // ждём запуска
+await Task.Delay(1000);
 
-// === 2. Создаём клиента ===
 using var client = new Client("127.0.0.1", 8888);
 
-// === 3. Отправляем List ===
-var result = await client.ListRequestAsync("./");
+var getResult = await client.GetRequestAsync("./TestFiles/Hello.txt");
 
-Console.WriteLine(result.Error!, result.Size);
+Console.WriteLine((getResult.Error ?? getResult.Error) ?? string.Empty, getResult.Size);
 
-foreach (var elem in result.Data)
-{
-    Console.WriteLine(elem);
-}
+var text = Encoding.UTF8.GetString(getResult.Content);
+Console.WriteLine(text);
 
 server.Stop();
 Console.ReadKey();

@@ -144,8 +144,6 @@ public class Client : IDisposable
                 return ("Invalid file size", -1, []);
             }
 
-            Console.WriteLine(fileSize);
-
             using var ms = new MemoryStream();
             var buffer = new byte[81920];
             long totalRead = 0;

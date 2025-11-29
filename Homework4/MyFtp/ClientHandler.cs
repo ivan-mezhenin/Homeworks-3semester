@@ -91,10 +91,9 @@ public class ClientHandler
         }
 
         var content = await File.ReadAllBytesAsync(fullPath);
+
         await writer.WriteAsync(content.Length + " ");
-
         await stream.WriteAsync(content);
-
         await stream.WriteAsync(new[] { (byte)'\n' });
     }
 

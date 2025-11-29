@@ -2,8 +2,6 @@
 // Copyright (c) ivan-mezhenin. All rights reserved.
 // </copyright>
 
-using System.Text.Unicode;
-
 namespace MyFtp;
 
 using System.Net.Sockets;
@@ -84,7 +82,7 @@ public class Client : IDisposable
                 }
             }
 
-            return (string.Empty, lineCount, files);
+            return (null, lineCount, files);
         }
         catch (Exception ex)
         {
@@ -124,7 +122,7 @@ public class Client : IDisposable
                         continue;
                 }
 
-                sizeBuilder.Append(currentByte);
+                sizeBuilder.Append((char)currentByte);
             }
 
             if (sizeBuilder.Length == 0)
@@ -151,18 +149,30 @@ public class Client : IDisposable
             while (totalRead < fileSize)
             {
                 var toRead = (int)Math.Min(buffer.Length, fileSize - totalRead);
-                var readByte = await this.stream.ReadAsync(buffer.AsMemory(0, toRead));
+                var read = await this.stream.ReadAsync(buffer.AsMemory(0, toRead));
 
-                if (readByte == 0)
+                if (read < 0)
+                {
+                    return ("Connection lost during download", -1, []);
+                }
+
+                if (read == 0)
                 {
                     break;
                 }
 
-                ms.Write(buffer, 0, readByte);
-                totalRead += readByte;
+                var bytesToTake = Math.Min(read, (int)(fileSize - totalRead));
+                ms.Write(buffer, 0, bytesToTake);
+                totalRead += bytesToTake;
             }
 
-            return (null, fileSize, ms.ToArray());
+            var resultBytes = ms.ToArray();
+            if (resultBytes.Length > 0 && resultBytes[^1] == 10)
+            {
+                resultBytes = resultBytes[..^1];
+            }
+
+            return (null, fileSize, resultBytes);
         }
         catch (Exception ex)
         {

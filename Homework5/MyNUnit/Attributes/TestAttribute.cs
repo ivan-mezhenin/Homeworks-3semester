@@ -8,7 +8,7 @@ namespace MyNUnit.Attributes;
 /// attribute for test class.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method)]
-public class TestAttribute
+public class TestAttribute : Attribute
 {
     /// <summary>
     /// Gets or sets expected type of exception.

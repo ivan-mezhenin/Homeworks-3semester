@@ -33,32 +33,37 @@ public class TestRunner
 
         var assemblies = this.FindAssemblies(this.path);
 
-        foreach (var assemblyPath in assemblies)
+        Parallel.ForEach(assemblies, assemblyPath =>
         {
             try
             {
                 var assembly = Assembly.LoadFrom(assemblyPath);
+                var testClasses = this.FindTestClasses(assembly);
 
-                var testClases = this.FindTestClasses(assembly);
-
-                foreach (var testClass in testClases)
+                foreach (var testClass in testClasses)
                 {
                     var testClassResults = this.RunTestsInClass(testClass);
-                    testResults.AddRange(testClassResults);
+                    lock (testResults)
+                    {
+                        testResults.AddRange(testClassResults);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                testResults.Add(new TestResult
+                lock (testResults)
                 {
-                    ClassName = "AssemblyLoader",
-                    MethodName = Path.GetFileName(assemblyPath),
-                    Status = TestStatus.Error,
-                    ErrorMessage = $"Failed to load assembly: {ex.Message}",
-                    Exception = ex,
-                });
+                    testResults.Add(new TestResult
+                    {
+                        ClassName = "AssemblyLoader",
+                        MethodName = Path.GetFileName(assemblyPath),
+                        Status = TestStatus.Error,
+                        ErrorMessage = $"Failed to load assembly: {ex.Message}",
+                        Exception = ex,
+                    });
+                }
             }
-        }
+        });
 
         return testResults;
     }
@@ -66,17 +71,23 @@ public class TestRunner
     /// <summary>
     /// to find all assemblies.
     /// </summary>
-    /// <param name="path">path to test project.</param>
+    /// <param name="searchPath">path to test project.</param>
     /// <returns>list with assemblies.</returns>
-    private List<string> FindAssemblies(string path)
+    private List<string> FindAssemblies(string searchPath)
     {
         var assemblies = new List<string>();
 
-        // TODO: Реализовать поиск DLL файлов
-        // Если path - файл .dll -> добавить его
-        // Если path - директория -> найти все .dll в ней и поддиректориях
+        if (File.Exists(searchPath) && searchPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+        {
+            assemblies.Add(searchPath);
+        }
+        else if (Directory.Exists(searchPath))
+        {
+            assemblies.AddRange(Directory.GetFiles(searchPath, "*.dll", SearchOption.AllDirectories));
+            assemblies.AddRange(Directory.GetFiles(searchPath, "*.exe", SearchOption.AllDirectories));
+        }
 
-        return assemblies;
+        return assemblies.Where(a => !Path.GetFileName(a).StartsWith("MyNUnit")).ToList();
     }
 
     /// <summary>
@@ -88,7 +99,21 @@ public class TestRunner
     {
         var testClasses = new List<Type>();
 
-        // TODO: Реализовать поиск классов с методами [Test]
+        try
+        {
+            foreach (var type in assembly.GetTypes())
+            {
+                var methods = type.GetMethods();
+                if (methods.Any(m => m.GetCustomAttribute<Attributes.TestAttribute>() != null))
+                {
+                    testClasses.Add(type);
+                }
+            }
+        }
+        catch (ReflectionTypeLoadException ex)
+        {
+            Console.WriteLine($"Failed to load types from assembly {assembly.FullName}: {ex.Message}");
+        }
 
         return testClasses;
     }
@@ -102,15 +127,116 @@ public class TestRunner
     {
         var results = new List<TestResult>();
 
-        // TODO: Реализовать запуск тестов в одном классе
-        // 1. Проверить валидность класса (статичность BeforeClass/AfterClass)
-        // 2. Запустить BeforeClass методы
-        // 3. Для каждого теста:
-        //    - Запустить Before методы
-        //    - Запустить тест
-        //    - Запустить After методы
-        // 4. Запустить AfterClass методы
+        try
+        {
+            AttributeFinder.ValidateTestClass(testClass);
+
+            var beforeClassMethods = AttributeFinder.GetBeforeClassMethods(testClass);
+            var afterClassMethods = AttributeFinder.GetAfterClassMethods(testClass);
+            var beforeMethods = AttributeFinder.GetBeforeMethods(testClass);
+            var afterMethods = AttributeFinder.GetAfterMethods(testClass);
+            var testMethods = AttributeFinder.GetTestMethods(testClass);
+
+            if (testMethods.Count == 0)
+            {
+                return results;
+            }
+
+            // Run BeforeClass methods
+            foreach (var method in beforeClassMethods)
+            {
+                method.Invoke(null, null);
+            }
+
+            // Run tests in parallel, but create separate instance for each test
+            Parallel.ForEach(testMethods, testMethod =>
+            {
+                var testResult = this.RunSingleTest(testClass, testMethod, beforeMethods, afterMethods);
+                lock (results)
+                {
+                    results.Add(testResult);
+                }
+            });
+
+            // Run AfterClass methods
+            foreach (var method in afterClassMethods)
+            {
+                method.Invoke(null, null);
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult
+            {
+                ClassName = testClass.FullName ?? testClass.Name,
+                MethodName = "ClassInitialization",
+                Status = TestStatus.Error,
+                ErrorMessage = $"Failed to initialize test class: {ex.Message}",
+                Exception = ex,
+            });
+        }
 
         return results;
+    }
+
+    /// <summary>
+    /// Runs a single test with Before/After methods.
+    /// </summary>
+    private TestResult RunSingleTest(
+        Type testClass,
+        MethodInfo testMethod,
+        List<MethodInfo> beforeMethods,
+        List<MethodInfo> afterMethods)
+    {
+        var executor = new TestExecutor();
+
+        try
+        {
+            var testInstance = Activator.CreateInstance(testClass);
+
+            if (testInstance == null)
+            {
+                return new TestResult
+                {
+                    ClassName = testClass.FullName ?? testClass.Name,
+                    MethodName = testMethod.Name,
+                    Status = TestStatus.Error,
+                    ErrorMessage = $"Failed to create instance of test class",
+                    Exception = new InvalidOperationException($"Could not instantiate {testClass.Name}"),
+                };
+            }
+
+            foreach (var method in beforeMethods)
+            {
+                method.Invoke(testInstance, null);
+            }
+
+            var result = executor.ExecuteTest(testInstance, testMethod);
+
+            foreach (var method in afterMethods)
+            {
+                try
+                {
+                    method.Invoke(testInstance, null);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Warning: After method '{method.Name}' failed: {ex.Message}");
+                }
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return new TestResult
+            {
+                ClassName = testClass.FullName ?? testClass.Name,
+                MethodName = testMethod.Name,
+                Status = TestStatus.Error,
+                ErrorMessage = $"Test setup failed: {ex.Message}",
+                Exception = ex,
+            };
+        }
     }
 }

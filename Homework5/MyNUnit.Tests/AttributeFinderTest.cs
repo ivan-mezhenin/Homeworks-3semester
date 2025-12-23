@@ -11,7 +11,6 @@ using NUnit.Framework;
 /// <summary>
 /// tests for AttributeFinder.cs.
 /// </summary>
-[TestFixture]
 public class AttributeFinderTest
 {
     /// <summary>

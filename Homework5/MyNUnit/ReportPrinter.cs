@@ -179,13 +179,13 @@ public class ReportPrinter
         if (passed == totalTests)
         {
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("\n✅ All tests passed!");
+            Console.WriteLine("\n All tests passed!");
             Console.ResetColor();
         }
         else
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"\n❌ {failed + errors} test(s) failed or had errors.");
+            Console.WriteLine($"\n {failed + errors} test(s) failed or had errors.");
             Console.ResetColor();
         }
     }

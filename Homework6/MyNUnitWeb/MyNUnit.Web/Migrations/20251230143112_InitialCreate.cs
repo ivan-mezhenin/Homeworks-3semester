@@ -1,10 +1,12 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Migrations;
-
-#nullable disable
+﻿// <copyright file="20251230143112_InitialCreate.cs" company="ivan-mezhenin">
+// Copyright (c) ivan-mezhenin. All rights reserved.
+// </copyright>
 
 namespace MyNUnit.Web.Migrations
 {
+    using System;
+    using Microsoft.EntityFrameworkCore.Migrations;
+
     /// <inheritdoc />
     public partial class InitialCreate : Migration
     {
@@ -17,7 +19,7 @@ namespace MyNUnit.Web.Migrations
                 {
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
                     RunTime = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    TotalDurationMs = table.Column<long>(type: "INTEGER", nullable: false)
+                    TotalDurationMs = table.Column<long>(type: "INTEGER", nullable: false),
                 },
                 constraints: table =>
                 {
@@ -35,7 +37,7 @@ namespace MyNUnit.Web.Migrations
                     Status = table.Column<int>(type: "INTEGER", nullable: false),
                     Duration = table.Column<string>(type: "TEXT", nullable: false),
                     ErrorMessage = table.Column<string>(type: "TEXT", nullable: true),
-                    IgnoreReason = table.Column<string>(type: "TEXT", nullable: true)
+                    IgnoreReason = table.Column<string>(type: "TEXT", nullable: true),
                 },
                 constraints: table =>
                 {
@@ -56,7 +58,7 @@ namespace MyNUnit.Web.Migrations
                     FileName = table.Column<string>(type: "TEXT", nullable: false),
                     FilePath = table.Column<string>(type: "TEXT", nullable: false),
                     UploadTime = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    TestRunId = table.Column<Guid>(type: "TEXT", nullable: true)
+                    TestRunId = table.Column<Guid>(type: "TEXT", nullable: true),
                 },
                 constraints: table =>
                 {

@@ -1,5 +1,5 @@
-﻿// <copyright file="RunTestsRequest.cs" company="PlaceholderCompany">
-// Copyright (c) PlaceholderCompany. All rights reserved.
+﻿// <copyright file="RunTestsRequest.cs" company="ivan-mezhenin">
+// Copyright (c) ivan-mezhenin. All rights reserved.
 // </copyright>
 
 namespace MyNUnit.Web;

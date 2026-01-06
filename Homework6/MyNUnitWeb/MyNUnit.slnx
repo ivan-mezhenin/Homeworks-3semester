@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="MyNUnit.Core/MyNUnit.Core.csproj" />
+  <Project Path="MyNUnit.Web/MyNUnit.Web.csproj" />
+</Solution>

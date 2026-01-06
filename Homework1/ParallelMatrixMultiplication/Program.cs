@@ -4,6 +4,13 @@
 
 using ParallelMatrixMultiplication;
 
+if (args.Length > 0 && args[0] == "--benchmark")
+{
+    Console.WriteLine("=== Запуск бенчмарка умножения матриц ===");
+    MatrixBenchmark.RunBenchmark();
+    return 0;
+}
+
 // Write dotnet run -- Matrix1File Matrix2File FileWithResult
 if (string.IsNullOrEmpty(args[0]) || string.IsNullOrEmpty(args[1]) || string.IsNullOrEmpty(args[2]) || args.Length < 3)
 {

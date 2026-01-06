@@ -83,16 +83,16 @@ public static class MatrixTools
 
         for (var row = 0; row < rows1; row++)
         {
-            for (var col = 0; col < cols2; col++)
+            for (var column = 0; column < cols2; column++)
             {
                 var sum = 0;
 
                 for (var k = 0; k < cols1; k++)
                 {
-                    sum += matrix1[row, k] * matrix2[k, col];
+                    sum += matrix1[row, k] * matrix2[k, column];
                 }
 
-                resultMatrix[row, col] = sum;
+                resultMatrix[row, column] = sum;
             }
         }
 
@@ -118,24 +118,34 @@ public static class MatrixTools
         }
 
         var resultMatrix = new int[rows1, cols2];
-        var threads = new Thread[rows1];
 
-        for (var row = 0; row < rows1; row++)
+        var threadCount = Math.Min(Environment.ProcessorCount, rows1);
+        var threads = new Thread[threadCount];
+
+        var rowsPerThread = (int)Math.Ceiling((double)rows1 / threadCount);
+
+        for (var threadIndex = 0; threadIndex < threadCount; threadIndex++)
         {
-            var localRow = row;
+            var localThreadIndex = threadIndex;
 
-            threads[row] = new Thread(() =>
+            threads[threadIndex] = new Thread(() =>
             {
-                for (var col = 0; col < cols2; col++)
+                var startRow = localThreadIndex * rowsPerThread;
+                var endRow = Math.Min(startRow + rowsPerThread, rows1);
+
+                for (var row = startRow; row < endRow; row++)
                 {
-                    var sum = 0;
-
-                    for (var k = 0; k < cols1; k++)
+                    for (var col = 0; col < cols2; col++)
                     {
-                        sum += matrix1[localRow, k] * matrix2[k, col];
-                    }
+                        var sum = 0;
 
-                    resultMatrix[localRow, col] = sum;
+                        for (var k = 0; k < cols1; k++)
+                        {
+                            sum += matrix1[row, k] * matrix2[k, col];
+                        }
+
+                        resultMatrix[row, col] = sum;
+                    }
                 }
             });
         }

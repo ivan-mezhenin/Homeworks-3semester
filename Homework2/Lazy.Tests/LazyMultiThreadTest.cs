@@ -17,7 +17,7 @@ public class LazyMultiThreadTest : GeneralBehaviorTests
     public void Lazy_Get_MultiThreads_NoDataRaces()
     {
         var callCount = 0;
-        var lazy = this.CreateLazy<int>(() =>
+        var lazy = this.CreateLazy(() =>
         {
             Interlocked.Increment(ref callCount);
             return 44;
@@ -27,11 +27,15 @@ public class LazyMultiThreadTest : GeneralBehaviorTests
         const int threadsCount = 100;
         var threads = new Thread[threadsCount];
         var results = new int[threadsCount];
+
+        var startSignal = new ManualResetEvent(false);
+
         for (var i = 0; i < threadsCount; i++)
         {
             var index = i;
             threads[i] = new Thread(() =>
             {
+                startSignal.WaitOne();
                 results[index] = lazy.Get();
             });
         }
@@ -41,10 +45,14 @@ public class LazyMultiThreadTest : GeneralBehaviorTests
             thread.Start();
         }
 
+        startSignal.Set();
+
         foreach (var thread in threads)
         {
             thread.Join();
         }
+
+        startSignal.Dispose();
 
         Assert.Multiple(() =>
         {
@@ -53,7 +61,7 @@ public class LazyMultiThreadTest : GeneralBehaviorTests
         });
     }
 
-    /// <summary>
+   /// <summary>
     /// test for Get() returns null if supplier returns null.
     /// </summary>
     [Test]
@@ -69,11 +77,15 @@ public class LazyMultiThreadTest : GeneralBehaviorTests
         const int threadsCount = 100;
         var threads = new Thread[threadsCount];
         var results = new string?[threadsCount];
+
+        using var startSignal = new ManualResetEvent(false);
+
         for (var i = 0; i < threadsCount; i++)
         {
             var index = i;
             threads[i] = new Thread(() =>
             {
+                startSignal.WaitOne();
                 results[index] = lazy.Get();
             });
         }
@@ -82,6 +94,8 @@ public class LazyMultiThreadTest : GeneralBehaviorTests
         {
             thread.Start();
         }
+
+        startSignal.Set();
 
         foreach (var thread in threads)
         {
@@ -106,11 +120,15 @@ public class LazyMultiThreadTest : GeneralBehaviorTests
         const int threadsCount = 100;
         var threads = new Thread[threadsCount];
         var exceptions = new Exception[threadsCount];
+
+        using var startSignal = new ManualResetEvent(false);
+
         for (var i = 0; i < threadsCount; i++)
         {
             var index = i;
             threads[i] = new Thread(() =>
             {
+                startSignal.WaitOne();
                 try
                 {
                     lazy.Get();
@@ -126,6 +144,8 @@ public class LazyMultiThreadTest : GeneralBehaviorTests
         {
             thread.Start();
         }
+
+        startSignal.Set();
 
         foreach (var thread in threads)
         {

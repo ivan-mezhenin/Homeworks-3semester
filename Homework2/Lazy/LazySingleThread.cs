@@ -21,7 +21,6 @@ public class LazySingleThread<T> : ILazy<T>
     public LazySingleThread(Func<T> supplier)
     {
         this.supplier = supplier ?? throw new ArgumentNullException(nameof(supplier));
-        this.isValueCalculated = false;
     }
 
     /// <summary>

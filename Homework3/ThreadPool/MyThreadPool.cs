@@ -14,7 +14,7 @@ public class MyThreadPool
     private readonly Queue<Action> taskQueue = new Queue<Action>();
     private readonly object queueLock = new object();
     private readonly ManualResetEvent taskAvailable = new(false);
-    private readonly CancellationTokenSource cts = new CancellationTokenSource();
+    private readonly CancellationTokenSource cts = new();
     private Exception? exception;
 
     /// <summary>

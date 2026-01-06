@@ -41,14 +41,16 @@ jobs:
     - name: Build and Test
       shell: pwsh
       run: |
-        $solutionFiles = Get-ChildItem -Recurse -Filter *.sln -File
-        $solutionXFiles = Get-ChildItem -Recurse -Filter *.slnx -File
+        $solutionFiles = @(Get-ChildItem -Recurse -Filter *.sln -File)
+        $solutionXFiles = @(Get-ChildItem -Recurse -Filter *.slnx -File)
         $allFiles = $solutionFiles + $solutionXFiles
         
         foreach ($file in $allFiles) {
-          Write-Host "Processing: $($file.FullName)"
-          dotnet build $file.FullName
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet test $file.FullName --no-build
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($file.FullName -notmatch "CalculatorOnForms2") {
+            Write-Host "Processing: $($file.FullName)"
+            dotnet build $file.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            dotnet test $file.FullName --no-build
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
         }

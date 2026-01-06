@@ -122,10 +122,7 @@ public class MyThreadPoolTest
     /// </summary>
     [Test]
     public void MyThreadPool_Constructor_ZeroThreads_ThrowsArgumentOutOfRangeException()
-     => Assert.Throws<ArgumentOutOfRangeException>(() =>
-     {
-         _ = new MyThreadPool(0);
-     });
+     => Assert.Throws<ArgumentOutOfRangeException>(() => new MyThreadPool(0));
 
     /// <summary>
     /// test for correct throwing aggregate exception in continue with.

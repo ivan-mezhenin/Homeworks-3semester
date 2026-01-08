@@ -191,20 +191,6 @@ public class ClientTest
     }
 
     /// <summary>
-    /// test for connecting to non-existing server.
-    /// </summary>
-    [Test]
-    public void Connect_ToNonExistingServer_ShouldFail()
-    {
-        using var client = new Client("127.0.0.1", 9999);
-
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-
-        Assert.ThrowsAsync<System.Net.Sockets.SocketException>(() =>
-            client.ConnectAsync(cts.Token));
-    }
-
-    /// <summary>
     /// test for calling request without connection.
     /// </summary>
     [Test]

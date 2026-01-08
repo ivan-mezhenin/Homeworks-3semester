@@ -20,14 +20,21 @@ public class ClientTest
     {
         Directory.SetCurrentDirectory(AppContext.BaseDirectory);
         this.server = new Server(Port);
-        _ = Task.Run(() => this.server.StartAsync());
+        this.server.StartAsync().Wait();
     }
 
     /// <summary>
     /// method to be called immediately after each test is run.
     /// </summary>
     [TearDown]
-    public void TearDown() => this.server?.Stop();
+    public void TearDown()
+    {
+        if (this.server != null)
+        {
+            this.server.Stop();
+            this.server.Dispose();
+        }
+    }
 
     /// <summary>
     /// test for correct listing directory with test files.
@@ -37,10 +44,12 @@ public class ClientTest
     public async Task List_Directory()
     {
         using var client = new Client("127.0.0.1", Port);
+        await client.ConnectAsync(CancellationToken.None);
+
         const int expectedSize = 2;
         var expectedItems = new List<(string, bool)> { ("TestFile1.txt", false), ("TestFile2.txt", false) };
 
-        var (error, size, items) = await client.ListRequestAsync("TestFiles");
+        var (error, size, items) = await client.ListRequestAsync("TestFiles", CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -58,8 +67,9 @@ public class ClientTest
     public async Task List_NonExistingDirectory()
     {
         using var client = new Client("127.0.0.1", Port);
+        await client.ConnectAsync(CancellationToken.None);
 
-        var (error, size, items) = await client.ListRequestAsync("Non-existingFile.txt");
+        var (error, size, items) = await client.ListRequestAsync("Non-existingFile.txt", CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -70,33 +80,36 @@ public class ClientTest
     }
 
     /// <summary>
-    /// test for correct getting testFile1.
+    /// test for correct getting testFile1 using MemoryStream.
     /// </summary>
     /// <returns><see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
-    public async Task Get_TestFile1()
+    public async Task Get_TestFile1_WithMemoryStream()
     {
         using var client = new Client("127.0.0.1", Port);
-        var testFile = Path.Combine(AppContext.BaseDirectory, "TestFiles", "TestFile1.txt");
+        await client.ConnectAsync(CancellationToken.None);
 
+        var testFile = Path.Combine(AppContext.BaseDirectory, "TestFiles", "TestFile1.txt");
         var expectedBytes = await File.ReadAllBytesAsync(testFile);
 
-        var (error, size, items) = await client.GetRequestAsync("TestFiles/TestFile1.txt");
+        using var memoryStream = new MemoryStream();
+        var (error, size) = await client.GetRequestAsync("TestFiles/TestFile1.txt", memoryStream, CancellationToken.None);
+        var content = memoryStream.ToArray();
 
         Assert.Multiple(() =>
         {
             Assert.That(error, Is.Null);
             Assert.That(size, Is.EqualTo(expectedBytes.Length));
-            Assert.That(items, Is.EqualTo(expectedBytes));
+            Assert.That(content, Is.EqualTo(expectedBytes));
         });
     }
 
     /// <summary>
-    /// test for correct getting testFile1 by ten clients.
+    /// test for correct getting testFile1 by ten clients using MemoryStream.
     /// </summary>
     /// <returns><see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
-    public async Task Get_10Clients_TestFile1_Concurrently()
+    public async Task Get_10Clients_TestFile1_Concurrently_WithMemoryStream()
     {
         const int clientCount = 10;
         var testFilePath = Path.Combine(AppContext.BaseDirectory, "TestFiles", "TestFile1.txt");
@@ -112,7 +125,11 @@ public class ClientTest
                 Task.Run(async () =>
             {
                 using var client = new Client("127.0.0.1", Port);
-                results[index] = await client.GetRequestAsync("TestFiles/TestFile1.txt");
+                await client.ConnectAsync(CancellationToken.None);
+
+                using var memoryStream = new MemoryStream();
+                var (error, size) = await client.GetRequestAsync("TestFiles/TestFile1.txt", memoryStream, CancellationToken.None);
+                results[index] = (error, size, memoryStream.ToArray());
             }));
         }
 
@@ -141,16 +158,20 @@ public class ClientTest
         var listTask = Task.Run(async () =>
         {
             using var client = new Client("127.0.0.1", Port);
-            var (error, size, items) = await client.ListRequestAsync("TestFiles");
+            await client.ConnectAsync(CancellationToken.None);
+            var (error, size, items) = await client.ListRequestAsync("TestFiles", CancellationToken.None);
             return (error, size, items);
         });
 
         var getTask = Task.Run(async () =>
         {
             using var client = new Client("127.0.0.1", Port);
+            await client.ConnectAsync(CancellationToken.None);
             var expectedBytes = await File.ReadAllBytesAsync(testFile);
-            var result = await client.GetRequestAsync("TestFiles/TestFile2.txt");
-            return (result.Error, result.Size, result.Content, expectedBytes);
+
+            using var memoryStream = new MemoryStream();
+            var (error, size) = await client.GetRequestAsync("TestFiles/TestFile2.txt", memoryStream, CancellationToken.None);
+            return (error, size, memoryStream.ToArray(), expectedBytes);
         });
 
         await Task.WhenAll(listTask, getTask);
@@ -163,8 +184,98 @@ public class ClientTest
             Assert.That(listResult.error, Is.Null);
             Assert.That(listResult.size, Is.GreaterThan(0));
 
-            Assert.That(getResult.Error, Is.Null);
-            Assert.That(getResult.Content, Is.EqualTo(getResult.expectedBytes));
+            Assert.That(getResult.error, Is.Null);
+            Assert.That(getResult.size, Is.EqualTo(getResult.expectedBytes.Length));
+            Assert.That(getResult.Item3, Is.EqualTo(getResult.expectedBytes));
+        });
+    }
+
+    /// <summary>
+    /// test for connecting to non-existing server.
+    /// </summary>
+    [Test]
+    public void Connect_ToNonExistingServer_ShouldFail()
+    {
+        using var client = new Client("127.0.0.1", 9999);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        Assert.ThrowsAsync<System.Net.Sockets.SocketException>(() =>
+            client.ConnectAsync(cts.Token));
+    }
+
+    /// <summary>
+    /// test for calling request without connection.
+    /// </summary>
+    [Test]
+    public void Request_WithoutConnection_ShouldThrow()
+    {
+        using var client = new Client("127.0.0.1", Port);
+
+        Assert.ThrowsAsync<InvalidOperationException>(() =>
+            client.ListRequestAsync("TestFiles", CancellationToken.None));
+    }
+
+    /// <summary>
+    /// test for multiple connect calls.
+    /// </summary>
+    /// <returns><see cref="Task"/> representing the asynchronous unit test.</returns>
+    [Test]
+    public async Task Connect_MultipleTimes_ShouldNotFail()
+    {
+        using var client = new Client("127.0.0.1", Port);
+
+        await client.ConnectAsync(CancellationToken.None);
+        await client.ConnectAsync(CancellationToken.None);
+
+        Assert.That(client.IsConnected(), Is.True);
+    }
+
+    /// <summary>
+    /// test for cancellation during Get request.
+    /// </summary>
+    /// <returns><see cref="Task"/> representing the asynchronous unit test.</returns>
+    [Test]
+    public async Task GetRequest_Cancellation_ShouldReturnCancelled()
+    {
+        using var client = new Client("127.0.0.1", Port);
+        await client.ConnectAsync(CancellationToken.None);
+
+        using var cts = new CancellationTokenSource();
+
+        await cts.CancelAsync();
+
+        using var memoryStream = new MemoryStream();
+        var (error, size) = await client.GetRequestAsync("TestFiles/TestFile1.txt", memoryStream, cts.Token);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(error, Is.EqualTo("Request cancelled"));
+            Assert.That(size, Is.EqualTo(-1));
+        });
+    }
+
+    /// <summary>
+    /// test for cancellation during List request.
+    /// </summary>
+    /// <returns><see cref="Task"/> representing the asynchronous unit test.</returns>
+    [Test]
+    public async Task ListRequest_Cancellation_ShouldReturnCancelled()
+    {
+        using var client = new Client("127.0.0.1", Port);
+        await client.ConnectAsync(CancellationToken.None);
+
+        using var cts = new CancellationTokenSource();
+
+        await cts.CancelAsync();
+
+        var (error, size, items) = await client.ListRequestAsync("TestFiles", cts.Token);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(error, Is.EqualTo("Request cancelled"));
+            Assert.That(size, Is.EqualTo(-1));
+            Assert.That(items, Is.Empty);
         });
     }
 }

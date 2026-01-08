@@ -5,39 +5,33 @@
 namespace MyFtp;
 
 using System.Net.Sockets;
+using System.Text;
 
 /// <summary>
 /// client request handler.
 /// </summary>
-public class ClientHandler
+public static class ClientHandler
 {
-    private readonly Socket socket;
-    private readonly string baseDirectory;
+    private static readonly string BaseDirectory = Directory.GetCurrentDirectory();
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ClientHandler"/> class.
+    /// Handle client connection.
     /// </summary>
-    /// <param name="socket">socket.</param>
-    public ClientHandler(Socket socket)
+    /// <param name="socket">Client socket.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Task representing the client handling operation.</returns>
+    public static async Task HandleAsync(Socket socket, CancellationToken cancellationToken = default)
     {
-        this.socket = socket;
-        this.baseDirectory = Directory.GetCurrentDirectory();
-    }
-
-    /// <summary>
-    /// client handler.
-    /// </summary>
-    /// <returns>task.</returns>
-    public async Task HandleAsync()
-    {
-        await using var stream = new NetworkStream(this.socket);
+        await using var stream = new NetworkStream(socket);
         await using var writer = new StreamWriter(stream);
         writer.AutoFlush = true;
         using var reader = new StreamReader(stream);
 
         try
         {
-            var request = await reader.ReadLineAsync();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var request = await ReadLineWithCancellationAsync(reader, cancellationToken);
             if (string.IsNullOrEmpty(request))
             {
                 return;
@@ -56,20 +50,35 @@ public class ClientHandler
             {
                 case 1:
                 {
-                    await this.HandleListAsync(filePath, writer);
+                    await HandleListAsync(filePath, writer, cancellationToken);
                     break;
                 }
 
                 case 2:
                 {
-                    await this.HandleGetAsync(filePath, writer, stream);
+                    await HandleGetAsync(filePath, writer, stream, cancellationToken);
                     break;
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Запрос отменен - нормальное завершение при остановке сервера
+        }
         finally
         {
-            this.socket.Close();
+            try
+            {
+                if (socket.Connected)
+                {
+                    socket.Shutdown(SocketShutdown.Both);
+                    socket.Close();
+                }
+            }
+            catch
+            {
+                // Игнорируем ошибки при закрытии сокета
+            }
         }
     }
 
@@ -79,22 +88,33 @@ public class ClientHandler
     /// <param name="filePath">file to get.</param>
     /// <param name="writer">stream writer.</param>
     /// <param name="stream">network stream.</param>
-    private async Task HandleGetAsync(string filePath, StreamWriter writer, NetworkStream stream)
+    /// <param name="cancellationToken">Cancellation token.</param>
+    private static async Task HandleGetAsync(string filePath, StreamWriter writer, NetworkStream stream, CancellationToken cancellationToken)
     {
-        var fullPath = Path.GetFullPath(Path.Combine(this.baseDirectory, filePath));
+        var fullPath = Path.GetFullPath(Path.Combine(BaseDirectory, filePath));
 
-        if (!fullPath.StartsWith(this.baseDirectory, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
+        if (!fullPath.StartsWith(BaseDirectory, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
         {
-            await writer.WriteLineAsync("-1");
-            await writer.WriteLineAsync();
+            await WriteLineWithCancellationAsync(writer, "-1", cancellationToken);
+            await WriteLineWithCancellationAsync(writer, string.Empty, cancellationToken);
             return;
         }
 
-        var content = await File.ReadAllBytesAsync(fullPath);
+        var fileInfo = new FileInfo(fullPath);
+        var fileSize = fileInfo.Length;
 
-        await writer.WriteAsync(content.Length + " ");
-        await stream.WriteAsync(content);
-        await stream.WriteAsync(new[] { (byte)'\n' });
+        await WriteWithCancellationAsync(writer, fileSize + " ", cancellationToken);
+
+        await using var fileStream = new FileStream(
+            fullPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 81920,
+            useAsync: true);
+
+        await fileStream.CopyToAsync(stream, cancellationToken);
+        await stream.WriteAsync(new[] { (byte)'\n' }, cancellationToken);
     }
 
     /// <summary>
@@ -102,19 +122,22 @@ public class ClientHandler
     /// </summary>
     /// <param name="filePath">file to list.</param>
     /// <param name="writer">stream writer.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>task.</returns>
-    private async Task HandleListAsync(string filePath, StreamWriter writer)
+    private static async Task HandleListAsync(string filePath, StreamWriter writer, CancellationToken cancellationToken)
     {
-        var fullPath = Path.GetFullPath(Path.Combine(this.baseDirectory, filePath));
+        var fullPath = Path.GetFullPath(Path.Combine(BaseDirectory, filePath));
 
-        if (!fullPath.StartsWith(this.baseDirectory, StringComparison.OrdinalIgnoreCase) || !Directory.Exists(fullPath))
+        if (!fullPath.StartsWith(BaseDirectory, StringComparison.OrdinalIgnoreCase) || !Directory.Exists(fullPath))
         {
-            await writer.WriteLineAsync("-1");
-            await writer.WriteLineAsync();
+            await WriteLineWithCancellationAsync(writer, "-1", cancellationToken);
+            await WriteLineWithCancellationAsync(writer, string.Empty, cancellationToken);
             return;
         }
 
-        var files = Directory.GetFileSystemEntries(fullPath)
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var files = Directory.EnumerateFileSystemEntries(fullPath)
             .Select(file => new
             {
                 name = Path.GetFileName(file),
@@ -123,13 +146,67 @@ public class ClientHandler
             .OrderBy(x => x.name)
             .ToArray();
 
-        await writer.WriteLineAsync(files.Length.ToString());
+        await WriteLineWithCancellationAsync(writer, files.Length.ToString(), cancellationToken);
 
         foreach (var file in files)
         {
-            await writer.WriteLineAsync($"{file.name} {file.isDirectory.ToString().ToLower()}");
+            cancellationToken.ThrowIfCancellationRequested();
+            await WriteLineWithCancellationAsync(writer, $"{file.name} {file.isDirectory.ToString().ToLower()}", cancellationToken);
         }
 
-        await writer.WriteLineAsync();
+        await WriteLineWithCancellationAsync(writer, string.Empty, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads a line with cancellation support.
+    /// </summary>
+    private static async Task<string?> ReadLineWithCancellationAsync(StreamReader reader, CancellationToken cancellationToken)
+    {
+        var result = new StringBuilder();
+        var buffer = new char[1];
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var read = await reader.ReadAsync(buffer, 0, 1);
+            if (read == 0)
+            {
+                return null;
+            }
+
+            if (buffer[0] == '\n')
+            {
+                break;
+            }
+
+            if (buffer[0] != '\r')
+            {
+                result.Append(buffer[0]);
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Writes a line with cancellation support.
+    /// </summary>
+    private static async Task WriteLineWithCancellationAsync(StreamWriter writer, string value, CancellationToken cancellationToken)
+    {
+        await WriteWithCancellationAsync(writer, value + "\n", cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes text with cancellation support.
+    /// </summary>
+    private static async Task WriteWithCancellationAsync(StreamWriter writer, string value, CancellationToken cancellationToken)
+    {
+        foreach (var ch in value)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await writer.WriteAsync(ch);
+        }
+
+        await writer.FlushAsync(cancellationToken);
     }
 }

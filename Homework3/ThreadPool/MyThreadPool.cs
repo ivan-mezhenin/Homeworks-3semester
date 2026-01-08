@@ -11,7 +11,7 @@ public class MyThreadPool
 {
     private readonly int threadCount;
     private readonly Thread[] threads;
-    private readonly Queue<Action> taskQueue = new Queue<Action>();
+    private readonly Queue<Action> taskQueue = new();
     private readonly object queueLock = new object();
     private readonly ManualResetEvent taskAvailable = new(false);
     private readonly CancellationTokenSource cts = new();

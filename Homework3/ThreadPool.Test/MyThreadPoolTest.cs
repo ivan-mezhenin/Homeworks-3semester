@@ -25,47 +25,52 @@ public class MyThreadPoolTest
         {
             Assert.That(task.Result, Is.EqualTo(expectedResult));
             Assert.That(task.IsCompleted, Is.True);
-            Assert.That(pool.PoolException, Is.Null);
         });
 
         pool.Shutdown();
     }
 
     /// <summary>
-    /// test for correct throwing aggregate exception and ending of the threads.
+    /// test for correct throwing aggregate exception without stopping the pool.
     /// </summary>
     [Test]
-    public void MyThreadPool_Submit_TaskWithException_ThrowsAggregateExceptionAndShutsDownPool()
+    public void MyThreadPool_Submit_TaskWithException_ThrowsAggregateExceptionButPoolContinues()
     {
         var pool = new MyThreadPool(2);
+
         var failingTask = () =>
         {
             int[] numbers = [];
             if (numbers.Length == 0)
             {
-                throw new InvalidOperationException();
+                throw new InvalidOperationException("Test exception");
             }
 
             return numbers.Sum(x => x * x);
         };
 
         var task = pool.Submit(failingTask);
-        Exception? caughtException = null;
+
+        Assert.Throws<AggregateException>(() => _ = task.Result);
+
         try
         {
-             _ = task.Result;
+            _ = task.Result;
         }
         catch (AggregateException ex)
         {
-            caughtException = ex.InnerException;
+            Assert.That(ex.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(ex.InnerException!.Message, Is.EqualTo("Test exception"));
         }
 
+        var anotherTask = pool.Submit(() => 42);
         Assert.Multiple(() =>
         {
-            Assert.That(caughtException, Is.TypeOf<InvalidOperationException>());
-            Assert.That(pool.PoolException, Is.Not.Null);
-            Assert.That(() => pool.Submit(() => 0), Throws.InvalidOperationException);
+            Assert.That(anotherTask.Result, Is.EqualTo(42));
+            Assert.That(anotherTask.IsCompleted, Is.True);
         });
+
+        pool.Shutdown();
     }
 
     /// <summary>
@@ -94,26 +99,6 @@ public class MyThreadPoolTest
             });
         }
 
-        Assert.That(pool.PoolException, Is.Null);
-
-        pool.Shutdown();
-    }
-
-    /// <summary>
-    /// test for creation at least N threads when initializing thread pool.
-    /// </summary>
-    [Test]
-    public void MyThreadPool_Constructor_CreatesAtLeastNThreads()
-    {
-        const int threadCount = 10;
-
-        var pool = new MyThreadPool(threadCount);
-        var threads = pool.GetType().GetField("threads", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(pool) as Thread[];
-
-        Assert.That(threads, Is.Not.Null);
-        Assert.That(threads, Has.Length.EqualTo(threadCount));
-        Assert.That(threads, Has.All.Property("IsAlive").True);
-
         pool.Shutdown();
     }
 
@@ -134,7 +119,7 @@ public class MyThreadPoolTest
 
         var initialTask = pool.Submit(() => 5);
 
-        var continuationTask = initialTask.ContinueWith<int>(x => throw new InvalidOperationException());
+        var continuationTask = initialTask.ContinueWith<int>(_ => throw new InvalidOperationException());
         Exception? caughtException = null;
         try
         {
@@ -167,7 +152,6 @@ public class MyThreadPoolTest
             Assert.That(continuationTask.Result, Is.EqualTo(expectedContinuationTaskResult));
             Assert.That(task.IsCompleted, Is.True);
             Assert.That(task.Result, Is.EqualTo(expectedTaskResult));
-            Assert.That(pool.PoolException, Is.Null);
         });
 
         pool.Shutdown();

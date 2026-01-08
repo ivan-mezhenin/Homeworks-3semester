@@ -8,10 +8,10 @@ namespace ThreadPool;
 /// task of thread pool.
 /// </summary>
 /// <typeparam name="TResult">type of task completion result.</typeparam>
-public class MyTask<TResult> : IMyTask<TResult>
+internal class MyTask<TResult> : IMyTask<TResult>
 {
     private readonly Func<TResult> func;
-    private readonly object locker = new object();
+    private readonly Lock locker = new();
     private readonly ManualResetEvent completionEvent = new(false);
     private readonly List<Action> continuations = [];
     private readonly MyThreadPool pool;
@@ -28,7 +28,6 @@ public class MyTask<TResult> : IMyTask<TResult>
     {
         this.func = func ?? throw new ArgumentNullException(nameof(func));
         this.pool = pool;
-        this.isCompleted = false;
     }
 
     /// <inheritdoc/>
@@ -46,12 +45,18 @@ public class MyTask<TResult> : IMyTask<TResult>
 
             lock (this.locker)
             {
-                if (this.pool.PoolException != null)
+                if (this.exception != null)
                 {
-                    throw new AggregateException(this.pool.PoolException);
+                    throw new AggregateException(this.exception);
                 }
 
-                return this.exception != null ? throw new AggregateException(this.exception) : this.result!;
+                if (this.result == null)
+                {
+                    throw new InvalidOperationException(
+                        "Task completed with unexpected null result. ");
+                }
+
+                return this.result;
             }
         }
     }
@@ -61,30 +66,39 @@ public class MyTask<TResult> : IMyTask<TResult>
     {
         ArgumentNullException.ThrowIfNull(continuation);
 
+        MyTask<TNewResult> newTask;
+
         lock (this.locker)
         {
-            var newTask = new MyTask<TNewResult>(
-                () => continuation(
-                    this.exception != null
-                ? throw new AggregateException(this.exception) : this.result!),
-                this.pool);
+            var capturedException = this.exception;
+            var capturedResult = this.result;
+            var capturedIsCompleted = this.isCompleted;
 
-            if (this.IsCompleted)
+            TNewResult ContinuationFunc()
             {
-                if (this.pool.PoolException != null)
+                if (capturedException != null)
                 {
-                    throw new InvalidOperationException("Cannot continue task after pool error");
+                    throw new AggregateException(capturedException);
                 }
 
+                return continuation(capturedResult ??
+                                    throw new InvalidOperationException(
+                                        $"Cannot continue task: source task completed with null result."));
+            }
+
+            newTask = new MyTask<TNewResult>(ContinuationFunc, this.pool);
+
+            if (capturedIsCompleted)
+            {
                 this.pool.EnqueueTask(newTask.Complete);
             }
             else
             {
-                this.continuations.Add(() => this.pool.EnqueueTask(newTask.Complete));
+                this.continuations.Add(newTask.Complete);
             }
-
-            return newTask;
         }
+
+        return newTask;
     }
 
     /// <summary>
@@ -99,21 +113,23 @@ public class MyTask<TResult> : IMyTask<TResult>
         catch (Exception ex)
         {
             this.exception = ex;
-            throw;
         }
         finally
         {
+            List<Action> continuationsToExecute;
+
             lock (this.locker)
             {
                 this.isCompleted = true;
                 this.completionEvent.Set();
-                foreach (var continuation in this.continuations)
-                {
-                    if (this.pool.PoolException == null)
-                    {
-                        this.pool.EnqueueTask(continuation);
-                    }
-                }
+
+                continuationsToExecute = new List<Action>(this.continuations);
+                this.continuations.Clear();
+            }
+
+            foreach (var continuation in continuationsToExecute)
+            {
+                    this.pool.EnqueueTask(continuation);
             }
         }
     }

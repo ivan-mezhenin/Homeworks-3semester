@@ -9,13 +9,11 @@ namespace ThreadPool;
 /// </summary>
 public class MyThreadPool
 {
-    private readonly int threadCount;
     private readonly Thread[] threads;
     private readonly Queue<Action> taskQueue = new Queue<Action>();
-    private readonly object queueLock = new object();
+    private readonly Lock queueLock = new();
     private readonly ManualResetEvent taskAvailable = new(false);
     private readonly CancellationTokenSource cts = new();
-    private Exception? exception;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MyThreadPool"/> class.
@@ -24,28 +22,12 @@ public class MyThreadPool
     public MyThreadPool(int threadCount)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(threadCount);
-        this.threadCount = threadCount;
 
         this.threads = new Thread[threadCount];
         for (var i = 0; i < threadCount; i++)
         {
             this.threads[i] = new Thread(this.WorkerLoop);
             this.threads[i].Start();
-        }
-    }
-
-    /// <summary>
-    /// Gets pool exception.
-    /// </summary>
-    /// <returns>exception.</returns>
-    public Exception? PoolException
-    {
-        get
-        {
-            lock (this.queueLock)
-            {
-                return this.exception;
-            }
         }
     }
 
@@ -57,11 +39,6 @@ public class MyThreadPool
     /// <returns>task.</returns>
     public IMyTask<TResult> Submit<TResult>(Func<TResult> func)
     {
-        if (this.cts.IsCancellationRequested)
-        {
-            throw new InvalidOperationException("Cannot submit tasks after shutdown");
-        }
-
         var newTask = new MyTask<TResult>(func, this);
         this.EnqueueTask(newTask.Complete);
         return newTask;
@@ -76,7 +53,6 @@ public class MyThreadPool
         {
             if (!this.cts.Token.IsCancellationRequested)
             {
-                this.taskQueue.Clear();
                 this.cts.Cancel();
                 this.taskAvailable.Set();
             }
@@ -111,7 +87,7 @@ public class MyThreadPool
     /// </summary>
     private void WorkerLoop()
     {
-        while (!this.cts.Token.IsCancellationRequested)
+        while (true)
         {
             Action? task = null;
             lock (this.queueLock)
@@ -120,29 +96,29 @@ public class MyThreadPool
                 {
                     task = this.taskQueue.Dequeue();
                 }
+                else if (this.cts.Token.IsCancellationRequested)
+                {
+                    break;
+                }
             }
 
             if (task != null)
             {
-                try
-                {
-                    task();
-                }
-                catch (Exception e)
-                {
-                    lock (this.queueLock)
-                    {
-                        this.exception = e;
-                    }
-
-                    this.Shutdown();
-                }
+                task();
             }
             else
             {
-                if (!this.cts.Token.IsCancellationRequested)
+                this.taskAvailable.WaitOne();
+
+                if (this.cts.Token.IsCancellationRequested)
                 {
-                    this.taskAvailable.WaitOne();
+                    lock (this.queueLock)
+                    {
+                        if (this.taskQueue.Count == 0)
+                        {
+                            break;
+                        }
+                    }
                 }
             }
         }

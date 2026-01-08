@@ -66,29 +66,11 @@ internal class MyTask<TResult> : IMyTask<TResult>
     {
         ArgumentNullException.ThrowIfNull(continuation);
 
-        MyTask<TNewResult> newTask;
-
         lock (this.locker)
         {
-            var capturedException = this.exception;
-            var capturedResult = this.result;
-            var capturedIsCompleted = this.isCompleted;
+            var newTask = new MyTask<TNewResult>(ContinuationFunc, this.pool);
 
-            TNewResult ContinuationFunc()
-            {
-                if (capturedException != null)
-                {
-                    throw new AggregateException(capturedException);
-                }
-
-                return continuation(capturedResult ??
-                                    throw new InvalidOperationException(
-                                        $"Cannot continue task: source task completed with null result."));
-            }
-
-            newTask = new MyTask<TNewResult>(ContinuationFunc, this.pool);
-
-            if (capturedIsCompleted)
+            if (this.IsCompleted)
             {
                 this.pool.EnqueueTask(newTask.Complete);
             }
@@ -96,9 +78,16 @@ internal class MyTask<TResult> : IMyTask<TResult>
             {
                 this.continuations.Add(newTask.Complete);
             }
-        }
 
-        return newTask;
+            return newTask;
+
+            TNewResult ContinuationFunc()
+            {
+                var sourceResult = this.Result;
+
+                return continuation(sourceResult);
+            }
+        }
     }
 
     /// <summary>

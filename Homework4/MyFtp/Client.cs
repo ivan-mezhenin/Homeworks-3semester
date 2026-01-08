@@ -70,7 +70,7 @@ public class Client : IDisposable
     }
 
     /// <summary>
-    /// list request.
+    /// list request async.
     /// </summary>
     /// <param name="filePath">file to list.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
